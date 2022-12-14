@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "name": "aws-rust-lambda",
+  "version": "0.0.1",
+  "generators": {
+    "aws-rust-lambda": {
+      "factory": "./src/generators/aws-rust-lambda/generator",
+      "schema": "./src/generators/aws-rust-lambda/schema.json",
+      "description": "aws-rust-lambda generator"
+    }
+  }
+}
