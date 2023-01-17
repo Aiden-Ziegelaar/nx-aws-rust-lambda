@@ -1,13 +1,11 @@
 import {
   addProjectConfiguration,
   formatFiles,
-  generateFiles,
   getWorkspaceLayout,
   names,
-  offsetFromRoot,
   Tree,
 } from '@nrwl/devkit';
-import * as path from 'path';
+import { runCargo } from '../../common';
 import { AwsRustLambdaGeneratorSchema } from './schema';
 
 interface NormalizedSchema extends AwsRustLambdaGeneratorSchema {
@@ -15,6 +13,7 @@ interface NormalizedSchema extends AwsRustLambdaGeneratorSchema {
   projectRoot: string;
   projectDirectory: string;
   parsedTags: string[];
+  parsedVariables: string[];
 }
 
 function normalizeOptions(
@@ -25,6 +24,8 @@ function normalizeOptions(
   const projectDirectory = options.directory
     ? `${names(options.directory).fileName}/${name}`
     : name;
+
+  const parsedVariables = options.variables ? options.variables.split(',') : [];
   const projectName = projectDirectory.replace(new RegExp('/', 'g'), '-');
   const projectRoot = `${getWorkspaceLayout(tree).libsDir}/${projectDirectory}`;
   const parsedTags = options.tags
@@ -37,22 +38,8 @@ function normalizeOptions(
     projectRoot,
     projectDirectory,
     parsedTags,
+    parsedVariables
   };
-}
-
-function addFiles(tree: Tree, options: NormalizedSchema) {
-  const templateOptions = {
-    ...options,
-    ...names(options.name),
-    offsetFromRoot: offsetFromRoot(options.projectRoot),
-    template: '',
-  };
-  generateFiles(
-    tree,
-    path.join(__dirname, 'files'),
-    options.projectRoot,
-    templateOptions
-  );
 }
 
 export default async function (
@@ -62,15 +49,31 @@ export default async function (
   const normalizedOptions = normalizeOptions(tree, options);
   addProjectConfiguration(tree, normalizedOptions.projectName, {
     root: normalizedOptions.projectRoot,
-    projectType: 'library',
+    projectType: 'application',
     sourceRoot: `${normalizedOptions.projectRoot}/src`,
     targets: {
       build: {
-        executor: '@aidozig/aws-rust-lambda:build',
+        executor: '@aidozig/lambda:build',
       },
     },
     tags: normalizedOptions.parsedTags,
   });
-  addFiles(tree, normalizedOptions);
-  await formatFiles(tree);
+
+  const cargoOptions: string[] = [];
+
+  cargoOptions.push('new');
+  
+  if(normalizedOptions.template) {
+    cargoOptions.push('--template');
+    cargoOptions.push(normalizedOptions.template);
+  }
+
+  normalizedOptions.parsedVariables.forEach(keyVariable => { 
+    cargoOptions.push('--render-var');
+    cargoOptions.push(keyVariable);
+  })
+  
+  cargoOptions.push(normalizedOptions.projectName);
+
+  await runCargo(cargoOptions, normalizedOptions.projectRoot);
 }
